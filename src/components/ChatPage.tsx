@@ -1,10 +1,11 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Clock, User, Share2, Check, Send, Camera } from 'lucide-react';
 import { ChatMessage, RadioUser } from '../types';
 import { soundEffects } from '../services/audioEffects';
 import { formatTimeSeconds } from '../services/audioGenerator';
 import { processImageFile } from '../utils/imageUtils';
 import { LargeAvatarUserData } from './LargeAvatarModal';
+import { audioIntensityService } from '../services/audioIntensityService';
 
 interface ChatPageProps {
   messages: ChatMessage[];
@@ -34,9 +35,19 @@ export const ChatPage: React.FC<ChatPageProps> = ({
   onOpenLargeAvatar,
 }) => {
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
+  const [isAudioPaused, setIsAudioPaused] = useState<boolean>(false);
+  const [audioProgress, setAudioProgress] = useState<number>(0);
   const [sharedAudioId, setSharedAudioId] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
   const chatFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Audio Playback References
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const activeAudioMsgRef = useRef<ChatMessage | null>(null);
+  const animFrameRef = useRef<number | null>(null);
+  const syntheticTimerRef = useRef<number | null>(null);
+  const syntheticRemainingMsRef = useRef<number>(0);
+  const syntheticStartTimestampRef = useRef<number>(0);
 
   const myCallSign = isAdminLoggedIn ? 'Salvador Silva' : (currentUser.callSign || 'Operador 42');
 
@@ -52,19 +63,180 @@ export const ChatPage: React.FC<ChatPageProps> = ({
       ? currentUser.avatar
       : null;
 
-  const handlePlayVoice = (msg: ChatMessage) => {
-    // Start audio playback from the beginning
-    setPlayingAudioId(msg.id);
-    if (msg.voiceAudioUrl) {
-      soundEffects.playRadioTransmission(msg.voiceAudioUrl, () => {
-        setPlayingAudioId((curr) => (curr === msg.id ? null : curr));
-      });
-    } else {
-      soundEffects.playRogerBeep('motorola');
-      setTimeout(() => {
-        setPlayingAudioId((curr) => (curr === msg.id ? null : curr));
-      }, (msg.voiceAudioDuration || 2) * 1000);
+  const stopAllPlayback = () => {
+    if (animFrameRef.current !== null) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
     }
+    if (currentAudioRef.current) {
+      try {
+        currentAudioRef.current.pause();
+        currentAudioRef.current.currentTime = 0;
+        currentAudioRef.current.onended = null;
+      } catch {}
+      currentAudioRef.current = null;
+    }
+    if (syntheticTimerRef.current !== null) {
+      clearTimeout(syntheticTimerRef.current);
+      syntheticTimerRef.current = null;
+    }
+    soundEffects.stopCurrentRadioTransmission();
+    audioIntensityService.stopAll();
+    setPlayingAudioId(null);
+    setIsAudioPaused(false);
+    setAudioProgress(0);
+    activeAudioMsgRef.current = null;
+  };
+
+  useEffect(() => {
+    return () => {
+      stopAllPlayback();
+    };
+  }, []);
+
+  // Smooth real-time progress tracking animation loop (60fps)
+  useEffect(() => {
+    if (!playingAudioId || isAudioPaused) {
+      if (animFrameRef.current !== null) {
+        cancelAnimationFrame(animFrameRef.current);
+        animFrameRef.current = null;
+      }
+      return;
+    }
+
+    const updateProgressLoop = () => {
+      if (currentAudioRef.current && activeAudioMsgRef.current) {
+        const audio = currentAudioRef.current;
+        const dur = audio.duration || activeAudioMsgRef.current.voiceAudioDuration || 2;
+        if (dur > 0 && !isNaN(audio.currentTime)) {
+          const pct = Math.min(100, Math.max(0, (audio.currentTime / dur) * 100));
+          setAudioProgress(pct);
+        }
+      } else if (activeAudioMsgRef.current && syntheticStartTimestampRef.current) {
+        const totalMs = (activeAudioMsgRef.current.voiceAudioDuration || 2) * 1000;
+        const elapsed = (Date.now() - syntheticStartTimestampRef.current) + (totalMs - syntheticRemainingMsRef.current);
+        const pct = Math.min(100, Math.max(0, (elapsed / totalMs) * 100));
+        setAudioProgress(pct);
+      }
+
+      animFrameRef.current = requestAnimationFrame(updateProgressLoop);
+    };
+
+    animFrameRef.current = requestAnimationFrame(updateProgressLoop);
+
+    return () => {
+      if (animFrameRef.current !== null) {
+        cancelAnimationFrame(animFrameRef.current);
+        animFrameRef.current = null;
+      }
+    };
+  }, [playingAudioId, isAudioPaused]);
+
+  const startAudioFromOffset = async (msg: ChatMessage, startOffsetSec: number = 0) => {
+    // Clean prior state
+    if (animFrameRef.current !== null) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
+    if (currentAudioRef.current) {
+      try {
+        currentAudioRef.current.pause();
+        currentAudioRef.current.onended = null;
+      } catch {}
+      currentAudioRef.current = null;
+    }
+    if (syntheticTimerRef.current !== null) {
+      clearTimeout(syntheticTimerRef.current);
+      syntheticTimerRef.current = null;
+    }
+
+    activeAudioMsgRef.current = msg;
+    setPlayingAudioId(msg.id);
+    setIsAudioPaused(false);
+    const initialPct = startOffsetSec > 0 ? (startOffsetSec / (msg.voiceAudioDuration || 2)) * 100 : 0;
+    setAudioProgress(initialPct);
+    audioIntensityService.startIncomingTracking();
+
+    if (msg.voiceAudioUrl) {
+      try {
+        const audio = new Audio(msg.voiceAudioUrl);
+        currentAudioRef.current = audio;
+        audio.currentTime = startOffsetSec;
+        audio.volume = 0.95;
+
+        audio.onended = () => {
+          soundEffects.playSquelch(100, 0.25);
+          stopAllPlayback();
+        };
+
+        if (startOffsetSec === 0) {
+          soundEffects.playSquelch(60, 0.15);
+        }
+        await audio.play();
+      } catch {
+        stopAllPlayback();
+      }
+    } else {
+      if (startOffsetSec === 0) {
+        soundEffects.playRogerBeep('motorola');
+      }
+      const totalDuration = (msg.voiceAudioDuration || 2) * 1000;
+      const remainingMs = Math.max(500, totalDuration - startOffsetSec * 1000);
+      syntheticRemainingMsRef.current = remainingMs;
+      syntheticStartTimestampRef.current = Date.now();
+
+      syntheticTimerRef.current = window.setTimeout(() => {
+        stopAllPlayback();
+      }, remainingMs);
+    }
+  };
+
+  // Click on audio line: Play or Pause
+  const handleAudioClick = (msg: ChatMessage) => {
+    // 1. If currently playing this audio and NOT paused -> PAUSE
+    if (playingAudioId === msg.id && !isAudioPaused) {
+      if (currentAudioRef.current) {
+        try {
+          currentAudioRef.current.pause();
+        } catch {}
+      }
+      if (syntheticTimerRef.current !== null) {
+        clearTimeout(syntheticTimerRef.current);
+        syntheticTimerRef.current = null;
+        const elapsed = Date.now() - syntheticStartTimestampRef.current;
+        syntheticRemainingMsRef.current = Math.max(0, syntheticRemainingMsRef.current - elapsed);
+      }
+      setIsAudioPaused(true);
+      audioIntensityService.stopAll();
+      return;
+    }
+
+    // 2. If currently paused on this audio -> RESUME
+    if (playingAudioId === msg.id && isAudioPaused) {
+      setIsAudioPaused(false);
+      audioIntensityService.startIncomingTracking();
+
+      if (currentAudioRef.current) {
+        currentAudioRef.current.play().catch(() => {
+          stopAllPlayback();
+        });
+      } else {
+        syntheticStartTimestampRef.current = Date.now();
+        syntheticTimerRef.current = window.setTimeout(() => {
+          stopAllPlayback();
+        }, syntheticRemainingMsRef.current || 1000);
+      }
+      return;
+    }
+
+    // 3. Otherwise: Start playing from beginning (0s)
+    startAudioFromOffset(msg, 0);
+  };
+
+  // Double Click on audio line: RESTART from beginning (0s)
+  const handleAudioDoubleClick = (msg: ChatMessage, e: React.MouseEvent) => {
+    e.stopPropagation();
+    startAudioFromOffset(msg, 0);
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -226,67 +398,86 @@ export const ChatPage: React.FC<ChatPageProps> = ({
             const isShared = sharedAudioId === msg.id;
             const durationSec = Math.round(msg.voiceAudioDuration || 1);
             const isSenderMe = msg.senderCallSign === myCallSign;
+            const currentElapsedSec = isPlaying
+              ? Math.min(durationSec, Math.floor((audioProgress / 100) * durationSec))
+              : durationSec;
 
             return (
               <div
                 key={msg.id}
                 id={`chat-item-${msg.id}`}
-                className={`w-full border-y px-3 sm:px-5 py-1.5 flex items-center justify-between shadow-sm transition-colors ${
+                className={`w-full border-y px-3 sm:px-5 py-1.5 flex items-center justify-between gap-2.5 sm:gap-4 shadow-sm transition-colors ${
                   msg.isPrivateModeration
                     ? 'bg-amber-950/25 border-amber-500/40 hover:bg-amber-950/35'
                     : 'bg-neutral-900 border-neutral-800/80 hover:bg-neutral-900/90'
                 }`}
               >
-                {/* Lado Esquerdo: Avatar + Login + (Linha invisível para áudio / Texto para mensagem) */}
-                <div className="flex items-center gap-2 sm:gap-2.5 max-w-[65%] sm:max-w-[75%]">
-                  <button
-                    type="button"
-                    onClick={() => handleAvatarClick(msg.senderCallSign, msg.senderAvatar)}
-                    title={isSenderMe ? "Clique para alterar a foto do seu login na galeria" : `Clique para ver a foto de ${msg.senderCallSign} em tamanho grande`}
-                    className="relative w-6 h-6 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center overflow-hidden shrink-0 cursor-pointer hover:scale-110 transition-transform"
-                  >
-                    {msg.senderAvatar && (msg.senderAvatar.startsWith('data:') || msg.senderAvatar.startsWith('http') || msg.senderAvatar.startsWith('blob:')) ? (
-                      <img src={msg.senderAvatar} alt={msg.senderCallSign} className="w-full h-full object-cover" />
-                    ) : (
-                      <User className="w-3.5 h-3.5 text-neutral-400" />
-                    )}
-                  </button>
-                  
-                  <div className="flex flex-col text-left justify-center overflow-hidden">
-                    {/* Login do Operador */}
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="font-tactical font-bold text-xs text-neutral-200 uppercase tracking-wide leading-tight">
-                        {msg.senderCallSign}
+                {/* Lado Esquerdo: Avatar */}
+                <button
+                  type="button"
+                  onClick={() => handleAvatarClick(msg.senderCallSign, msg.senderAvatar)}
+                  title={isSenderMe ? "Clique para alterar a foto do seu login na galeria" : `Clique para ver a foto de ${msg.senderCallSign} em tamanho grande`}
+                  className="relative w-6 h-6 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center overflow-hidden shrink-0 cursor-pointer hover:scale-110 transition-transform"
+                >
+                  {msg.senderAvatar && (msg.senderAvatar.startsWith('data:') || msg.senderAvatar.startsWith('http') || msg.senderAvatar.startsWith('blob:')) ? (
+                    <img src={msg.senderAvatar} alt={msg.senderCallSign} className="w-full h-full object-cover" />
+                  ) : (
+                    <User className="w-3.5 h-3.5 text-neutral-400" />
+                  )}
+                </button>
+                
+                {/* Centro: Login + Linha de Áudio percurso até perto de Compartilhar OU Texto */}
+                <div className="flex-1 flex flex-col justify-center min-w-0 pr-1">
+                  {/* Login do Operador */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-tactical font-bold text-xs text-neutral-200 uppercase tracking-wide leading-tight">
+                      {msg.senderCallSign}
+                    </span>
+                    {msg.isPrivateModeration && (
+                      <span className="text-[9px] font-mono-code font-bold text-amber-400 bg-amber-500/20 border border-amber-500/30 px-1.5 py-0.2 rounded uppercase">
+                        Moderação Privada
                       </span>
-                      {msg.isPrivateModeration && (
-                        <span className="text-[9px] font-mono-code font-bold text-amber-400 bg-amber-500/20 border border-amber-500/30 px-1.5 py-0.2 rounded uppercase">
-                          Moderação Privada
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Se for áudio: Linha abaixo do login, começando pela letra: laranja normalmente, fica azul ao reproduzir */}
-                    {isAudio ? (
-                      <div
-                        onClick={() => handlePlayVoice(msg)}
-                        title="Clique para ouvir o áudio do início"
-                        className="cursor-pointer py-1 group flex items-center"
-                      >
-                        <div
-                          className={`h-[2px] rounded-full transition-all duration-300 ${
-                            isPlaying
-                              ? 'w-28 sm:w-44 bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.9)] animate-pulse'
-                              : 'w-20 sm:w-32 bg-orange-500 shadow-[0_0_5px_rgba(249,115,22,0.6)] group-hover:bg-orange-400 group-hover:w-24'
-                          }`}
-                        />
-                      </div>
-                    ) : (
-                      /* Se for mensagem de texto */
-                      <p className="text-xs text-neutral-300 font-sans break-words mt-0.5 leading-snug">
-                        {msg.text}
-                      </p>
                     )}
                   </div>
+
+                  {/* Se for áudio: Linha quase invisível com percurso até pertinho do botão compartilhar */}
+                  {isAudio ? (
+                    <div
+                      id={`audio-line-btn-${msg.id}`}
+                      onClick={() => handleAudioClick(msg)}
+                      onDoubleClick={(e) => handleAudioDoubleClick(msg, e)}
+                      title={
+                        isPlaying && !isAudioPaused
+                          ? 'Clique para pausar • Duplo clique para reiniciar'
+                          : isPlaying && isAudioPaused
+                          ? 'Clique para continuar ouvindo • Duplo clique para reiniciar'
+                          : 'Clique para reproduzir • Duplo clique para reiniciar'
+                      }
+                      className="cursor-pointer py-1.5 group w-full flex items-center select-none"
+                    >
+                      {/* Linha quase invisível por todo o percurso */}
+                      <div className="relative w-full h-[2.5px] sm:h-[3px] bg-neutral-700/25 border border-neutral-700/20 rounded-full overflow-hidden transition-all group-hover:bg-neutral-600/35">
+                        {/* Azul começa do zero e preenche a linha até o final perto de Compartilhar */}
+                        <div
+                          className={`h-full rounded-full transition-all duration-75 ${
+                            isPlaying
+                              ? isAudioPaused
+                                ? 'bg-blue-400/80 shadow-[0_0_6px_#3b82f6]'
+                                : 'bg-blue-500 shadow-[0_0_10px_#3b82f6,0_0_3px_#2563eb]'
+                              : 'bg-transparent'
+                          }`}
+                          style={{
+                            width: isPlaying ? `${Math.min(100, Math.max(0, audioProgress))}%` : '0%',
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    /* Se for mensagem de texto */
+                    <p className="text-xs text-neutral-300 font-sans break-words mt-0.5 leading-snug">
+                      {msg.text}
+                    </p>
+                  )}
                 </div>
 
                 {/* Lado Direito: Tempo Utilizado bem pertinho do Botão Compartilhar na lateral direita */}
@@ -294,7 +485,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({
                   {/* Tempo Percorrido / Horário */}
                   <div className="flex items-center gap-1 font-mono-code text-[11px] sm:text-xs text-neutral-300">
                     <Clock className="w-3 h-3 text-neutral-400" />
-                    <span>{isAudio ? formatTimeSeconds(durationSec) : formatMsgTime(msg.timestamp)}</span>
+                    <span>{isAudio ? (isPlaying ? formatTimeSeconds(currentElapsedSec) : formatTimeSeconds(durationSec)) : formatMsgTime(msg.timestamp)}</span>
                   </div>
 
                   {/* Bem na lateral direita: Botão Compartilhar */}

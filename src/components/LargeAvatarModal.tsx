@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { X, Camera, User, Shield, CheckCircle2, Clock, Crown, Sparkles } from 'lucide-react';
+import { formatLoginTitleCase } from '../utils/formatUtils';
 
 export interface LargeAvatarUserData {
   callSign: string;
@@ -142,9 +143,9 @@ export const LargeAvatarModal: React.FC<LargeAvatarModalProps> = ({
         <div className="w-full flex flex-col items-center text-center space-y-1 mb-4">
           <h3
             id="large-avatar-callsign"
-            className="font-tactical font-bold text-lg sm:text-xl text-neutral-100 uppercase tracking-wider"
+            className="font-tactical font-bold text-lg sm:text-xl text-neutral-100 tracking-wider"
           >
-            {userData.callSign}
+            {formatLoginTitleCase(userData.callSign)}
           </h3>
           <div className="flex items-center gap-2 text-xs font-mono-code text-neutral-400">
             <span>Frequência QAP</span>

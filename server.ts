@@ -202,7 +202,7 @@ async function startServer() {
 
         switch (payload.type) {
           case 'UPDATE_PROFILE': {
-            if (payload.callSign) session.callSign = String(payload.callSign).slice(0, 24);
+            if (payload.callSign) session.callSign = String(payload.callSign).slice(0, 24).trim().toUpperCase();
             if (payload.avatar) session.avatar = String(payload.avatar);
             if (payload.role) session.role = String(payload.role);
             if (payload.status) session.status = String(payload.status);

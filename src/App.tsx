@@ -12,6 +12,7 @@ import { LargeAvatarModal, LargeAvatarUserData } from './components/LargeAvatarM
 import { socketService } from './services/socketService';
 import { soundEffects } from './services/audioEffects';
 import { generateRadioAudioWav } from './services/audioGenerator';
+import { audioIntensityService } from './services/audioIntensityService';
 
 export default function App() {
   // Navigation: Strict 3 pages [RADIO / USUÁRIO / CHAT]
@@ -326,7 +327,7 @@ export default function App() {
     const savedAvatar = typeof window !== 'undefined' ? localStorage.getItem('walkie_user_avatar') : null;
     return {
       id: 'usr-' + Math.random().toString(36).substring(2, 8),
-      callSign: savedCallSign || 'Operador 42',
+      callSign: savedCallSign ? savedCallSign.trim().toUpperCase() : 'OPERADOR 42',
       avatar: savedAvatar || 'shield',
       role: 'Comandante de Operações',
       status: 'QAP',
@@ -373,6 +374,24 @@ export default function App() {
   const [hasUnreadTextMessage, setHasUnreadTextMessage] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<RadioUser[]>([]);
   const [onlineUsersCount, setOnlineUsersCount] = useState(0);
+
+  // Audio Intensity state for VU Meter
+  const [audioIntensity, setAudioIntensity] = useState({ level: 0, isActive: false });
+
+  useEffect(() => {
+    const unsub = audioIntensityService.subscribe((level, isActive) => {
+      setAudioIntensity({ level, isActive });
+    });
+    return unsub;
+  }, []);
+
+  useEffect(() => {
+    if (incomingSpeaker && !isTransmitting) {
+      audioIntensityService.startIncomingTracking();
+    } else if (!incomingSpeaker && !isTransmitting) {
+      audioIntensityService.stopAll();
+    }
+  }, [incomingSpeaker, isTransmitting]);
 
   const activeTabRef = useRef<NavigationTab>(activeTab);
   const isAdminLoggedInRef = useRef<boolean>(isAdminLoggedIn);
@@ -476,15 +495,23 @@ export default function App() {
         setCurrentUser((prev) => ({ ...prev, id: payload.yourId }));
       }
       if (Array.isArray(payload.users)) {
-        setOnlineUsers(payload.users);
-        setOnlineUsersCount(payload.users.length);
+        const normalizedUsers = payload.users.map((u: RadioUser) => ({
+          ...u,
+          callSign: u.callSign ? u.callSign.trim().toUpperCase() : 'OPERADOR',
+        }));
+        setOnlineUsers(normalizedUsers);
+        setOnlineUsersCount(normalizedUsers.length);
       }
     });
 
     const unsubPresence = socketService.on('presence_update', (users) => {
       if (Array.isArray(users)) {
-        setOnlineUsers(users);
-        setOnlineUsersCount(users.length);
+        const normalizedUsers = users.map((u: RadioUser) => ({
+          ...u,
+          callSign: u.callSign ? u.callSign.trim().toUpperCase() : 'OPERADOR',
+        }));
+        setOnlineUsers(normalizedUsers);
+        setOnlineUsersCount(normalizedUsers.length);
       }
     });
 
@@ -708,6 +735,9 @@ export default function App() {
           },
         });
         
+        // Start real-time audio intensity tracking for VU meter lights
+        audioIntensityService.startMicTracking(stream);
+
         let mimeType = '';
         if (typeof MediaRecorder !== 'undefined') {
           if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
@@ -737,10 +767,13 @@ export default function App() {
         };
         recorder.start(250);
         mediaRecorderRef.current = recorder;
+      } else {
+        audioIntensityService.startMicTracking();
       }
     } catch (err) {
       console.warn('Microphone recording not allowed or unavailable:', err);
       mediaRecorderRef.current = null;
+      audioIntensityService.startMicTracking();
     }
 
     socketService.send({
@@ -820,6 +853,12 @@ export default function App() {
       isPrivateModeration: isUserInModeration,
     });
     setTxTime(0);
+
+    if (!incomingSpeaker) {
+      audioIntensityService.stopAll();
+    } else {
+      audioIntensityService.startIncomingTracking();
+    }
   };
 
   const handleToggleTransmission = () => {
@@ -1321,6 +1360,8 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         unreadChatCount={unreadChatCount}
+        isAudioActive={audioIntensity.isActive || isTransmitting || Boolean(incomingSpeaker)}
+        audioLevel={audioIntensity.level}
       />
 
       {/* Floating Large Avatar Modal */}

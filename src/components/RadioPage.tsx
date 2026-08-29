@@ -360,11 +360,11 @@ export const RadioPage: React.FC<RadioPageProps> = ({
               {/* Status Leds */}
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1.5">
-                  <span className={`w-2.5 h-2.5 rounded-full ${isTransmitting ? 'bg-red-500 shadow-md shadow-red-500 animate-ping' : 'bg-neutral-700'}`} />
+                  <span className={`w-2.5 h-2.5 rounded-full transition-all ${isTransmitting ? 'bg-red-500 shadow-md shadow-red-500 animate-ping opacity-100' : 'bg-transparent border-transparent opacity-0'}`} />
                   <span className="text-[10px] font-mono-code font-bold text-neutral-400">TX</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className={`w-2.5 h-2.5 rounded-full ${incomingSpeaker ? 'bg-emerald-500 shadow-md shadow-emerald-500 animate-ping' : 'bg-neutral-700'}`} />
+                  <span className={`w-2.5 h-2.5 rounded-full transition-all ${incomingSpeaker ? 'bg-emerald-500 shadow-md shadow-emerald-500 animate-ping opacity-100' : 'bg-transparent border-transparent opacity-0'}`} />
                   <span className="text-[10px] font-mono-code font-bold text-neutral-400">RX</span>
                 </div>
                 <div className="flex items-center gap-1.5">

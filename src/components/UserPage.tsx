@@ -3,6 +3,7 @@ import { Shield, ShieldAlert, User, Users, UserCheck, Crown, AlertTriangle, Volu
 import { RadioUser } from '../types';
 import { AdminUserActionMenu, AdminActionType } from './AdminUserActionMenu';
 import { processImageFile } from '../utils/imageUtils';
+import { formatLoginTitleCase } from '../utils/formatUtils';
 import { LargeAvatarUserData } from './LargeAvatarModal';
 
 interface UserPageProps {
@@ -100,7 +101,7 @@ export const UserPage: React.FC<UserPageProps> = ({
       userFileInputRef.current?.click();
     } else if (onOpenLargeAvatar) {
       onOpenLargeAvatar({
-        callSign: userCallSign,
+        callSign: formatLoginTitleCase(userCallSign),
         avatar: userAvatar,
         role: role,
         isOnline: true,
@@ -126,6 +127,8 @@ export const UserPage: React.FC<UserPageProps> = ({
       ? currentUser.avatar
       : user.avatar;
 
+    const formattedLogin = formatLoginTitleCase(user.callSign);
+
     return (
       <div key={user.id || user.callSign} className="relative">
         <div
@@ -149,7 +152,7 @@ export const UserPage: React.FC<UserPageProps> = ({
             <button
               type="button"
               onClick={(e) => handleAvatarClick(e, user.callSign, effectiveAvatar, roleCategory, effectiveAvailability)}
-              title={isMe ? 'Clique para inserir/alterar foto do seu login na galeria' : `Clique para ver a foto de ${user.callSign} em tamanho grande`}
+              title={isMe ? 'Clique para inserir/alterar foto do seu login na galeria' : `Clique para ver a foto de ${formattedLogin} em tamanho grande`}
               className={`relative w-8 h-8 rounded-full border flex items-center justify-center text-neutral-300 shrink-0 overflow-hidden cursor-pointer hover:scale-110 transition-transform ${
                 isSilenced
                   ? 'bg-red-950 border-red-500 text-red-400'
@@ -161,7 +164,7 @@ export const UserPage: React.FC<UserPageProps> = ({
               }`}
             >
               {effectiveAvatar && (effectiveAvatar.startsWith('data:') || effectiveAvatar.startsWith('http') || effectiveAvatar.startsWith('blob:')) ? (
-                <img src={effectiveAvatar} alt={user.callSign} className="w-full h-full object-cover rounded-full" />
+                <img src={effectiveAvatar} alt={formattedLogin} className="w-full h-full object-cover rounded-full" />
               ) : (
                 <User className="w-4 h-4" />
               )}
@@ -181,8 +184,8 @@ export const UserPage: React.FC<UserPageProps> = ({
             {/* Nome e Status */}
             <div className="flex flex-col text-left">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-tactical font-bold text-xs sm:text-sm text-neutral-200 uppercase tracking-wide leading-tight">
-                  {user.callSign}
+                <span className="font-tactical font-bold text-xs sm:text-sm text-neutral-200 tracking-wide leading-tight">
+                  {formattedLogin}
                 </span>
                 {isMe && !isAdminLoggedIn && (
                   <span className="text-[9px] font-mono-code text-neutral-400 bg-neutral-800 px-1 rounded">
@@ -310,7 +313,7 @@ export const UserPage: React.FC<UserPageProps> = ({
                   {/* Dados do Administrador */}
                   <div className="flex flex-col text-left">
                     <div className="flex items-center gap-2">
-                      <span className="font-tactical font-bold text-xs sm:text-sm text-neutral-100 uppercase tracking-wide">
+                      <span className="font-tactical font-bold text-xs sm:text-sm text-neutral-100 tracking-wide">
                         Salvador Silva
                       </span>
                       <span className="px-1.5 py-0.2 rounded bg-neutral-800 border border-neutral-700 text-[9px] font-tactical font-bold text-neutral-300 uppercase">

@@ -245,14 +245,14 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                 onClick={handleSpeakerAvatarClick}
                 title="Clique para ver a foto em tamanho grande"
                 aria-label={`Ver foto de ${speakerName} em tamanho grande`}
-                className="relative w-8 h-8 rounded-full bg-neutral-800 border border-red-500 flex items-center justify-center overflow-hidden shrink-0 shadow-[0_0_10px_rgba(239,68,68,0.5)] cursor-pointer hover:scale-110 transition-transform"
+                className="relative w-10 h-10 rounded-full bg-neutral-800 border-2 border-red-500 flex items-center justify-center overflow-hidden shrink-0 shadow-[0_0_12px_rgba(239,68,68,0.6)] cursor-pointer hover:scale-105 transition-transform"
               >
                 {speakerAvatar && (speakerAvatar.startsWith('data:') || speakerAvatar.startsWith('http') || speakerAvatar.startsWith('blob:')) ? (
                   <img src={speakerAvatar} alt={speakerName} className="w-full h-full object-cover rounded-full" />
                 ) : (
-                  <User className="w-4 h-4 text-red-400" />
+                  <User className="w-5 h-5 text-red-400" />
                 )}
-                <span className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-red-500 animate-ping" />
+                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-red-500 animate-ping ring-2 ring-neutral-900" />
               </button>
 
               {/* Login e Linha falando - 0:47 */}
