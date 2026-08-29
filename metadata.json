@@ -1,0 +1,7 @@
+{
+  "name": "Walkie Talkie PTT - Rádio em Tempo Real",
+  "description": "Aplicativo profissional de Walkie Talkie com transmissão de áudio em tempo real, canais de frequência, perfis de operador e chat tático.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
