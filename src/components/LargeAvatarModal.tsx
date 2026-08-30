@@ -130,12 +130,16 @@ export const LargeAvatarModal: React.FC<LargeAvatarModalProps> = ({
               className={`w-2 h-2 rounded-full ${
                 isOccupied
                   ? 'bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.9)]'
-                  : 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.9)] animate-pulse'
+                  : 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.9)] animate-pulse'
               }`}
             />
-            <span className="text-[10px] font-tactical font-bold text-neutral-200 uppercase tracking-wide">
-              {isOccupied ? 'OCUPADO' : 'DISPONÍVEL'}
-            </span>
+            <div className="flex items-center gap-1 text-[10px] font-tactical font-bold uppercase tracking-wide leading-none">
+              <span className="text-blue-400">ONLINE</span>
+              <span className="text-neutral-500">-</span>
+              <span className={isOccupied ? 'text-orange-400' : 'text-blue-400'}>
+                {isOccupied ? 'OCUPADO' : 'DISPONÍVEL'}
+              </span>
+            </div>
           </div>
         </div>
 

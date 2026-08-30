@@ -30,7 +30,9 @@ interface TopHeaderProps {
   txTime?: number;
   activeTab?: NavigationTab;
   isAdminLoggedIn?: boolean;
+  channelAvatar?: string | null;
   adminAvatar?: string | null;
+  onUpdateChannelAvatar?: (photoUrl: string) => void;
   onUpdateAdminAvatar?: (photoUrl: string) => void;
   onUpdateUserAvatar?: (photoUrl: string) => void;
   onOpenLargeAvatar?: (userData: LargeAvatarUserData) => void;
@@ -44,7 +46,9 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   currentUser,
   activeTab = 'RADIO',
   isAdminLoggedIn = false,
+  channelAvatar = null,
   adminAvatar = null,
+  onUpdateChannelAvatar,
   onUpdateAdminAvatar,
   onUpdateUserAvatar,
   onOpenLargeAvatar,
@@ -79,12 +83,13 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
 
   const isCurrentSpeakerMe = !incomingSpeaker;
 
+  // Speaker avatar is always the individual speaker's user profile photo
   const speakerAvatar = incomingSpeaker
     ? incomingSpeakerAvatar
-    : isAdminLoggedIn
-    ? adminAvatar
-    : currentUser.avatar && currentUser.avatar.startsWith('data:')
+    : currentUser.avatar && (currentUser.avatar.startsWith('data:') || currentUser.avatar.startsWith('http') || currentUser.avatar.startsWith('blob:'))
     ? currentUser.avatar
+    : isAdminLoggedIn && adminAvatar
+    ? adminAvatar
     : null;
 
   // Close floating menu when clicking outside
@@ -121,8 +126,21 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   };
 
   const handleAvatarClick = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
+    if (isAdminLoggedIn) {
+      // Administrator has direct permission to upload/change the EVANGELHO ETERNO channel photo
+      if (fileInputRef.current) {
+        fileInputRef.current.click();
+      }
+    } else if (onOpenLargeAvatar) {
+      // Non-admin can view the large photo of the channel
+      onOpenLargeAvatar({
+        callSign: 'EVANGELHO ETERNO',
+        avatar: channelAvatar,
+        role: 'Canal Oficial',
+        isOnline: true,
+        availability: 'DISPONIVEL',
+        isMe: false,
+      });
     }
   };
 
@@ -131,13 +149,13 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
     if (file) {
       try {
         const compressedUrl = await processImageFile(file);
-        if (isAdminLoggedIn && onUpdateAdminAvatar) {
+        if (onUpdateChannelAvatar) {
+          onUpdateChannelAvatar(compressedUrl);
+        } else if (onUpdateAdminAvatar) {
           onUpdateAdminAvatar(compressedUrl);
-        } else if (onUpdateUserAvatar) {
-          onUpdateUserAvatar(compressedUrl);
         }
       } catch (err) {
-        console.error('Erro ao processar imagem:', err);
+        console.error('Erro ao processar imagem do canal:', err);
       }
     }
     // Reset input so same file can be selected again if needed
@@ -152,54 +170,25 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
         avatar: speakerAvatar,
         role: incomingSpeaker ? 'Operador' : isAdminLoggedIn ? 'Administrador' : 'Usuário',
         isOnline: true,
-        availability: 'DISPONIVEL',
+        availability: effectiveAvailability,
         isMe: isCurrentSpeakerMe,
       });
     }
   };
 
-  // Render user or tactical avatar icon in the circular avatar ball
-  const renderAvatarContent = () => {
-    if (isAdminLoggedIn && adminAvatar) {
+  // Render the official channel avatar or tactical icon for EVANGELHO ETERNO
+  const renderChannelAvatarContent = () => {
+    if (channelAvatar && (channelAvatar.startsWith('data:') || channelAvatar.startsWith('http') || channelAvatar.startsWith('blob:'))) {
       return (
         <img
-          src={adminAvatar}
-          alt="Salvador Silva"
+          src={channelAvatar}
+          alt="Avatar do Canal EVANGELHO ETERNO"
           className="w-full h-full object-cover rounded-full"
         />
       );
     }
 
-    if (!isAdminLoggedIn && currentUser.avatar && (currentUser.avatar.startsWith('data:') || currentUser.avatar.startsWith('http') || currentUser.avatar.startsWith('blob:'))) {
-      return (
-        <img
-          src={currentUser.avatar}
-          alt={currentUser.callSign || 'Meu Login'}
-          className="w-full h-full object-cover rounded-full"
-        />
-      );
-    }
-
-    if (isAdminLoggedIn) {
-      return <Shield className="w-5 h-5" />;
-    }
-
-    switch (currentUser.avatar) {
-      case 'shield':
-        return <Shield className="w-5 h-5" />;
-      case 'eagle':
-        return <Zap className="w-5 h-5" />;
-      case 'tower':
-        return <RadioTower className="w-5 h-5" />;
-      case 'radio':
-        return <Radio className="w-5 h-5" />;
-      case 'medic':
-        return <Award className="w-5 h-5" />;
-      case 'cyber':
-        return <Cpu className="w-5 h-5" />;
-      default:
-        return <User className="w-5 h-5" />;
-    }
+    return <RadioTower className="w-5 h-5 text-amber-400" />;
   };
 
   return (
@@ -208,7 +197,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
         id="top-header-strip"
         className="w-full h-[1.5cm] min-h-[1.5cm] max-h-[1.5cm] bg-neutral-900/90 border-y border-neutral-800 rounded-none backdrop-blur-md px-4 sm:px-6 flex items-center justify-between shadow-md shadow-black/40 relative"
       >
-        {/* Input oculto para carregar foto da galeria */}
+        {/* Input oculto para carregar foto do Canal EVANGELHO ETERNO */}
         <input
           ref={fileInputRef}
           type="file"
@@ -217,23 +206,29 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
           onChange={handleFileChange}
         />
 
-        {/* Esquerda: Bola Avatar do Login + (EVANGELHO ETERNO ou Avatar+Login falando) */}
+        {/* Esquerda: Bola Avatar do Canal EVANGELHO ETERNO + (EVANGELHO ETERNO ou Avatar+Login falando) */}
         <div className="flex items-center gap-3">
-          {/* 1. Bola Avatar do Login (Clique abre a galeria para inserir foto) */}
+          {/* 1. Bola Avatar do Canal EVANGELHO ETERNO (Admin pode clicar para inserir foto exclusiva do canal) */}
           <button
             type="button"
             id="avatar-ball"
             onClick={handleAvatarClick}
-            title="Clique no avatar do seu login para inserir foto da galeria"
-            aria-label="Clique no avatar do seu login para inserir foto da galeria"
+            title={
+              isAdminLoggedIn
+                ? "Avatar do Canal EVANGELHO ETERNO (Clique para alterar foto do canal)"
+                : "Canal EVANGELHO ETERNO (Clique para ampliar)"
+            }
+            aria-label="Avatar do Canal EVANGELHO ETERNO"
             className="group relative flex items-center justify-center w-10 h-10 rounded-full bg-neutral-800 border border-neutral-700 text-neutral-300 shadow-sm shrink-0 overflow-hidden cursor-pointer ring-1 ring-neutral-700 hover:ring-amber-400 hover:scale-105 transition-all focus:outline-none"
           >
-            {renderAvatarContent()}
+            {renderChannelAvatarContent()}
             
-            {/* Indicador de câmera no hover para avisar que abre a galeria */}
-            <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-              <Camera className="w-4 h-4 text-amber-300 drop-shadow" />
-            </div>
+            {/* Indicador de câmera no hover para avisar o administrador */}
+            {isAdminLoggedIn && (
+              <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <Camera className="w-4 h-4 text-amber-300 drop-shadow" />
+              </div>
+            )}
           </button>
 
           {/* 2. Cobertura: Se falando, cobre EVANGELHO ETERNO, ONLINE e 1 com Avatar+Login e falando - 0:47 */}
@@ -266,7 +261,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
               </div>
             </div>
           ) : (
-            /* Estado Normal: EVANGELHO ETERNO e ONLINE */
+            /* Estado Normal: Canal EVANGELHO ETERNO e status ONLINE azul constante com número */
             <div className="flex flex-col justify-center">
               <h1
                 id="header-app-name"

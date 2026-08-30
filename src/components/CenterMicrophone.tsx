@@ -77,7 +77,7 @@ export const CenterMicrophone: React.FC<CenterMicrophoneProps> = ({
   return (
     <div
       id="center-microphone-container"
-      className="w-full flex flex-col items-center justify-center p-4 select-none my-auto relative"
+      className="w-full flex flex-col items-center justify-center p-4 select-none my-auto relative -translate-y-3 sm:-translate-y-6 pt-2 pb-6"
     >
       {/* Texto em LARANJA quando OCUPADO: ATUALMENTE VOCÊ ESTÁ OCUPADO */}
       {(isOccupied || clickedWhileOccupied) && (
@@ -198,81 +198,93 @@ export const CenterMicrophone: React.FC<CenterMicrophoneProps> = ({
         </div>
       )}
 
-      {/* Grande Círculo */}
-      <button
-        id="large-circle"
-        type="button"
-        onClick={handleMicClick}
-        aria-pressed={isTransmitting}
-        aria-label={
-          isOccupied
-            ? 'ATUALMENTE VOCÊ ESTÁ OCUPADO'
-            : isSilenced && !isModerationActive
-            ? 'Microfone silenciado pela moderação'
-            : isAlerted && !isModerationActive
-            ? 'Usuário alertado pela moderação (microfone ativo)'
-            : status === 'transmitting'
-            ? 'Transmitindo (Vermelho) - Clique para desligar'
-            : status === 'receiving'
-            ? 'Ouvindo (Azul)'
-            : 'Aperte para falar (Laranja)'
-        }
-        className={`relative flex items-center justify-center w-64 h-64 sm:w-72 sm:h-72 md:w-80 md:h-80 rounded-full border-4 bg-neutral-950/50 backdrop-blur-sm transition-all duration-300 cursor-pointer outline-none focus:ring-4 focus:ring-amber-500/20 active:scale-95 ${
-          isOccupied
-            ? 'border-orange-500 shadow-[0_0_40px_rgba(249,115,22,0.4)] ring-2 ring-orange-500/30'
-            : isSilenced && !isModerationActive
-            ? 'border-red-600/80 shadow-[0_0_40px_rgba(220,38,38,0.3)]'
-            : isAlerted && !isModerationActive && !isTransmitting && !isReceiving
-            ? 'border-orange-500 shadow-[0_0_40px_rgba(249,115,22,0.45)] ring-2 ring-orange-500/30'
-            : isModerationActive
-            ? status === 'transmitting'
-              ? 'border-red-500 shadow-[0_0_50px_rgba(239,68,68,0.4)] scale-105'
-              : 'border-amber-500 shadow-[0_0_40px_rgba(245,158,11,0.35)]'
-            : status === 'transmitting'
-            ? 'border-red-500 shadow-[0_0_50px_rgba(239,68,68,0.35)] scale-105'
-            : status === 'receiving'
-            ? 'border-blue-500 shadow-[0_0_50px_rgba(59,130,246,0.35)] scale-105'
-            : 'border-orange-500/70 hover:border-orange-400 hover:shadow-[0_0_40px_rgba(249,115,22,0.25)]'
-        }`}
-      >
-        {/* Anel sutil externo pulsante quando transmitindo (vermelho) ou ouvindo (azul) */}
-        {status === 'transmitting' && (
-          <div className="absolute inset-0 rounded-full border-4 border-red-500/30 animate-ping pointer-events-none" />
-        )}
-        {status === 'receiving' && (
-          <div className="absolute inset-0 rounded-full border-4 border-blue-500/30 animate-ping pointer-events-none" />
-        )}
-
-        {/* Pequeno Microfone no Centro */}
-        <div
-          id="center-mic-icon-wrapper"
-          className={`flex items-center justify-center w-12 h-12 rounded-full transition-all duration-200 pointer-events-none ${
+      {/* Grande Círculo / Bola Microfone Central Fixa com ancoragem de status */}
+      <div className="relative flex items-center justify-center">
+        <button
+          id="large-circle"
+          type="button"
+          onClick={handleMicClick}
+          aria-pressed={isTransmitting}
+          aria-label={
             isOccupied
-              ? 'bg-orange-950/80 text-orange-400 border border-orange-500/60 shadow-md shadow-orange-950/60'
+              ? 'ATUALMENTE VOCÊ ESTÁ OCUPADO'
               : isSilenced && !isModerationActive
-              ? 'bg-red-950/60 text-red-500 border border-red-500/40 shadow-md shadow-black/60'
+              ? 'Microfone silenciado pela moderação'
+              : isAlerted && !isModerationActive
+              ? 'Usuário alertado pela moderação (microfone ativo)'
+              : status === 'transmitting'
+              ? 'Transmitindo (Vermelho) - Clique para desligar'
+              : status === 'receiving'
+              ? 'Ouvindo (Azul)'
+              : 'Aperte para falar (Laranja)'
+          }
+          className={`relative flex items-center justify-center w-64 h-64 sm:w-72 sm:h-72 md:w-80 md:h-80 rounded-full border-4 bg-neutral-950/50 backdrop-blur-sm transition-colors duration-200 cursor-pointer outline-none focus:ring-4 focus:ring-amber-500/20 ${
+            isOccupied
+              ? 'border-orange-500 shadow-[0_0_40px_rgba(249,115,22,0.4)] ring-2 ring-orange-500/30'
+              : isSilenced && !isModerationActive
+              ? 'border-red-600/80 shadow-[0_0_40px_rgba(220,38,38,0.3)]'
               : isAlerted && !isModerationActive && !isTransmitting && !isReceiving
-              ? 'bg-orange-950/60 text-orange-400 border border-orange-500/50 shadow-md shadow-orange-950/50'
+              ? 'border-orange-500 shadow-[0_0_40px_rgba(249,115,22,0.45)] ring-2 ring-orange-500/30'
               : isModerationActive
               ? status === 'transmitting'
-                ? 'bg-red-500/20 text-red-500 shadow-lg shadow-red-500/30 ring-1 ring-red-500/50'
-                : 'bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-md shadow-black/60'
+                ? 'border-red-500 shadow-[0_0_50px_rgba(239,68,68,0.4)]'
+                : 'border-amber-500 shadow-[0_0_40px_rgba(245,158,11,0.35)]'
               : status === 'transmitting'
-              ? 'bg-red-500/20 text-red-500 shadow-lg shadow-red-500/30 ring-1 ring-red-500/50'
+              ? 'border-red-500 shadow-[0_0_50px_rgba(239,68,68,0.35)]'
               : status === 'receiving'
-              ? 'bg-blue-500/20 text-blue-400 shadow-lg shadow-blue-500/30 ring-1 ring-blue-500/50'
-              : 'bg-neutral-900/90 text-orange-400 border border-orange-500/30 shadow-md shadow-black/60 hover:text-orange-300'
+              ? 'border-blue-500 shadow-[0_0_50px_rgba(59,130,246,0.35)]'
+              : 'border-orange-500/70 hover:border-orange-400 hover:shadow-[0_0_40px_rgba(249,115,22,0.25)]'
           }`}
         >
-          {isOccupied ? (
-            <MicOff className="w-5 h-5" />
-          ) : status === 'receiving' ? (
-            <Volume2 className="w-5 h-5 animate-pulse" />
-          ) : (
-            <Mic className="w-5 h-5" />
-          )}
-        </div>
-      </button>
+          {/* Pequeno Microfone no Centro */}
+          <div
+            id="center-mic-icon-wrapper"
+            className={`flex items-center justify-center w-12 h-12 rounded-full transition-all duration-200 pointer-events-none ${
+              isOccupied
+                ? 'bg-orange-950/80 text-orange-400 border border-orange-500/60 shadow-md shadow-orange-950/60'
+                : isSilenced && !isModerationActive
+                ? 'bg-red-950/60 text-red-500 border border-red-500/40 shadow-md shadow-black/60'
+                : isAlerted && !isModerationActive && !isTransmitting && !isReceiving
+                ? 'bg-orange-950/60 text-orange-400 border border-orange-500/50 shadow-md shadow-orange-950/50'
+                : isModerationActive
+                ? status === 'transmitting'
+                  ? 'bg-red-500/20 text-red-500 shadow-lg shadow-red-500/30 ring-1 ring-red-500/50'
+                  : 'bg-amber-500/20 text-amber-400 border border-amber-500/40 shadow-md shadow-black/60'
+                : status === 'transmitting'
+                ? 'bg-red-500/20 text-red-500 shadow-lg shadow-red-500/30 ring-1 ring-red-500/50'
+                : status === 'receiving'
+                ? 'bg-blue-500/20 text-blue-400 shadow-lg shadow-blue-500/30 ring-1 ring-blue-500/50'
+                : 'bg-neutral-900/90 text-orange-400 border border-orange-500/30 shadow-md shadow-black/60 hover:text-orange-300'
+            }`}
+          >
+            {isOccupied ? (
+              <MicOff className="w-5 h-5" />
+            ) : status === 'receiving' ? (
+              <Volume2 className="w-5 h-5 animate-pulse" />
+            ) : (
+              <Mic className="w-5 h-5" />
+            )}
+          </div>
+        </button>
+
+        {/* Indicador AO VIVO posicionado de forma absoluta abaixo da bola (sem alterar o layout/posição da bola) */}
+        {status === 'transmitting' && (
+          <div
+            id="center-mic-live-label"
+            className="absolute -bottom-14 sm:-bottom-16 left-1/2 -translate-x-1/2 flex items-center justify-center animate-in fade-in zoom-in-95 duration-150 z-20 pointer-events-none whitespace-nowrap"
+          >
+            <div className="px-5 py-1.5 bg-gradient-to-r from-red-700 via-red-600 to-red-700 border-2 border-red-400 rounded-full shadow-[0_0_30px_rgba(239,68,68,0.7)] flex items-center gap-2.5">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
+              </span>
+              <span className="font-tactical font-black text-sm sm:text-base text-white tracking-widest uppercase drop-shadow-md">
+                AO VIVO
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

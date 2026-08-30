@@ -46,6 +46,37 @@ interface StoredTransmission {
   type: 'voice' | 'emergency';
 }
 
+interface RegisteredAccount {
+  id: string;
+  fullName: string;
+  login: string;
+  callSign: string;
+  email: string;
+  role: string;
+  createdAt: number;
+}
+
+const registeredAccounts: RegisteredAccount[] = [
+  {
+    id: 'user-admin-salvador',
+    fullName: 'Salvador Silva',
+    login: 'salvador silva',
+    callSign: 'Salvador Silva',
+    email: 'admin@evangelhoeterno.com',
+    role: 'Administrador',
+    createdAt: Date.now() - 1000 * 60 * 60 * 24 * 30,
+  },
+  {
+    id: 'user-salvador-short',
+    fullName: 'Salvador Silva',
+    login: 'salvador',
+    callSign: 'Salvador',
+    email: 'admin@evangelhoeterno.com',
+    role: 'Administrador',
+    createdAt: Date.now() - 1000 * 60 * 60 * 24 * 30,
+  }
+];
+
 const clients = new Map<WebSocket, ClientSession>();
 const recentMessages: StoredMessage[] = [
   {
@@ -109,7 +140,106 @@ async function startServer() {
     res.json({
       users: userList,
       messages: recentMessages.slice(-50),
-      transmissions: recentTransmissions.slice(-30)
+      transmissions: recentTransmissions.slice(-30),
+      registeredLogins: registeredAccounts.map(a => a.callSign)
+    });
+  });
+
+  // Check if a login/callsign already exists
+  app.get('/api/users/check-login', (req, res) => {
+    const rawLogin = String(req.query.login || '').trim();
+    if (!rawLogin) {
+      return res.json({ exists: false });
+    }
+    const normalized = rawLogin.toLowerCase();
+    const isRegistered = registeredAccounts.some(
+      acc => acc.login.toLowerCase() === normalized || acc.callSign.toLowerCase() === normalized
+    );
+    const isConnected = Array.from(clients.values()).some(
+      c => c.callSign.toLowerCase() === normalized
+    );
+    const exists = isRegistered || isConnected;
+    res.json({
+      exists,
+      message: exists ? 'Este login já foi criado. Por favor, escolha outro nome ou faça login.' : 'Login disponível'
+    });
+  });
+
+  // Get list of all registered logins
+  app.get('/api/users/registered', (req, res) => {
+    res.json({
+      registeredLogins: registeredAccounts.map(a => a.callSign),
+      registeredAccounts: registeredAccounts.map(a => ({
+        id: a.id,
+        callSign: a.callSign,
+        fullName: a.fullName,
+        role: a.role
+      }))
+    });
+  });
+
+  // Register a new user account with uniqueness validation
+  app.post('/api/users/register', (req, res) => {
+    const { fullName, callSign, email, password } = req.body || {};
+    const trimmedFullName = String(fullName || '').trim();
+    const trimmedCallSign = String(callSign || '').trim();
+    const trimmedEmail = String(email || '').trim().toLowerCase();
+
+    if (!trimmedFullName || !trimmedCallSign) {
+      return res.status(400).json({
+        success: false,
+        error: 'Nome completo e login são obrigatórios.'
+      });
+    }
+
+    const normalized = trimmedCallSign.toLowerCase();
+
+    // Check duplicate login in existing registered accounts or active clients
+    const alreadyExists = registeredAccounts.some(
+      acc => acc.login.toLowerCase() === normalized || acc.callSign.toLowerCase() === normalized
+    );
+
+    if (alreadyExists) {
+      return res.status(409).json({
+        success: false,
+        error: `O login "${trimmedCallSign}" já está em uso. Não é possível criar outro com o mesmo nome.`
+      });
+    }
+
+    const isSalvador =
+      trimmedFullName.toLowerCase() === 'salvador silva' ||
+      normalized === 'salvador silva' ||
+      normalized === 'salvador';
+
+    const newAccount: RegisteredAccount = {
+      id: 'usr-reg-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+      fullName: trimmedFullName,
+      login: normalized,
+      callSign: trimmedCallSign,
+      email: trimmedEmail,
+      role: isSalvador ? 'Administrador' : 'Operador',
+      createdAt: Date.now()
+    };
+
+    registeredAccounts.push(newAccount);
+
+    // Notify all connected clients of new registered account
+    broadcast({
+      type: 'NEW_USER_REGISTERED',
+      callSign: newAccount.callSign,
+      fullName: newAccount.fullName,
+      role: newAccount.role
+    });
+
+    res.status(201).json({
+      success: true,
+      user: {
+        id: newAccount.id,
+        fullName: newAccount.fullName,
+        callSign: newAccount.callSign,
+        email: newAccount.email,
+        role: newAccount.role
+      }
     });
   });
 

@@ -76,13 +76,13 @@ export const UserPage: React.FC<UserPageProps> = ({
     if (file) {
       try {
         const compressedUrl = await processImageFile(file);
-        if (isAdminLoggedIn && onUpdateAdminAvatar) {
-          onUpdateAdminAvatar(compressedUrl);
-        } else if (onUpdateUserAvatar) {
+        if (onUpdateUserAvatar) {
           onUpdateUserAvatar(compressedUrl);
+        } else if (isAdminLoggedIn && onUpdateAdminAvatar) {
+          onUpdateAdminAvatar(compressedUrl);
         }
       } catch (err) {
-        console.error('Erro ao selecionar foto:', err);
+        console.error('Erro ao selecionar foto do usuário:', err);
       }
     }
     e.target.value = '';
@@ -113,8 +113,6 @@ export const UserPage: React.FC<UserPageProps> = ({
 
   const renderUserCard = (
     user: { id?: string; callSign: string; avatar?: string },
-    badgeColor: string,
-    badgeText: string,
     roleCategory: string
   ) => {
     const isSilenced = silencedUsers.includes(user.callSign);
@@ -123,7 +121,7 @@ export const UserPage: React.FC<UserPageProps> = ({
     const effectiveAvailability = userAvailabilityMap[user.callSign] || (isMe ? myAvailability : 'DISPONIVEL');
     const isOccupied = effectiveAvailability === 'OCUPADO';
 
-    const effectiveAvatar = isMe && !isAdminLoggedIn && currentUser.avatar
+    const effectiveAvatar = isMe && currentUser.avatar
       ? currentUser.avatar
       : user.avatar;
 
@@ -168,6 +166,7 @@ export const UserPage: React.FC<UserPageProps> = ({
               ) : (
                 <User className="w-4 h-4" />
               )}
+              {/* Dot: Azul para disponível, Laranja para ocupado */}
               <span
                 className={`absolute bottom-0 right-0 w-2 h-2 rounded-full border border-neutral-900 ${
                   isSilenced
@@ -192,13 +191,6 @@ export const UserPage: React.FC<UserPageProps> = ({
                     (Você)
                   </span>
                 )}
-                {badgeText && (
-                  <span
-                    className={`text-[9px] font-tactical font-bold uppercase px-1.5 py-0.2 rounded border ${badgeColor}`}
-                  >
-                    {badgeText}
-                  </span>
-                )}
                 {isSilenced && (
                   <span className="text-[9px] font-tactical font-bold text-red-400 bg-red-950/80 border border-red-600/60 px-1.5 py-0.2 rounded flex items-center gap-1">
                     <VolumeX className="w-2.5 h-2.5" />
@@ -212,25 +204,21 @@ export const UserPage: React.FC<UserPageProps> = ({
                   </span>
                 )}
               </div>
-              <span
-                className={`text-[10px] font-mono-code font-medium ${
-                  isSilenced
-                    ? 'text-red-400'
-                    : isAlerted
-                    ? 'text-orange-400'
-                    : isOccupied
-                    ? 'text-orange-400'
-                    : 'text-blue-400'
-                }`}
-              >
-                {isSilenced
-                  ? 'Transmissão Bloqueada'
-                  : isAlerted
-                  ? 'Aviso de Moderação'
-                  : isOccupied
-                  ? 'Ocupado'
-                  : 'Disponível'}
-              </span>
+              <div className="flex items-center gap-1.5 text-[10px] font-mono-code font-bold leading-none mt-0.5">
+                {isSilenced ? (
+                  <span className="text-red-400">Transmissão Bloqueada</span>
+                ) : isAlerted ? (
+                  <span className="text-orange-400">Aviso de Moderação</span>
+                ) : (
+                  <>
+                    <span className="text-blue-400">ONLINE</span>
+                    <span className="text-neutral-500">-</span>
+                    <span className={isOccupied ? 'text-orange-400' : 'text-blue-400'}>
+                      {isOccupied ? 'OCUPADO' : 'DISPONÍVEL'}
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
@@ -286,45 +274,76 @@ export const UserPage: React.FC<UserPageProps> = ({
           <div className="min-h-[44px]">
             {isAdminLoggedIn ? (
               <div className="w-full">
-                <div
-                  id="admin-user-card"
-                  className="w-full bg-neutral-900/60 border-y border-neutral-800/80 px-4 sm:px-6 py-2 flex items-center gap-3 hover:bg-neutral-900/90 transition-colors shadow-sm"
-                >
-                  {/* Avatar Salvador Silva */}
-                  <button
-                    type="button"
-                    onClick={(e) => handleAvatarClick(e, 'Salvador Silva', adminAvatar, 'Administrador', 'DISPONIVEL')}
-                    title={isAdminLoggedIn ? 'Clique para inserir/alterar sua foto na galeria' : 'Clique para ver a foto de Salvador Silva em tamanho grande'}
-                    className="relative w-9 h-9 rounded-full bg-neutral-800 border-2 border-neutral-600 flex items-center justify-center overflow-hidden shrink-0 shadow-sm cursor-pointer hover:scale-110 transition-transform"
-                  >
-                    {adminAvatar ? (
-                      <img
-                        src={adminAvatar}
-                        alt="Salvador Silva"
-                        className="w-full h-full object-cover rounded-full"
-                      />
-                    ) : (
-                      <Shield className="w-4 h-4 text-neutral-400" />
-                    )}
-                    {/* Status Online dot */}
-                    <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border border-neutral-900 shadow-[0_0_6px_rgba(16,185,129,0.8)]" />
-                  </button>
+                {(() => {
+                  const isSalvadorOccupied =
+                    userAvailabilityMap['Salvador Silva'] === 'OCUPADO' ||
+                    (isAdminLoggedIn && myAvailability === 'OCUPADO');
 
-                  {/* Dados do Administrador */}
-                  <div className="flex flex-col text-left">
-                    <div className="flex items-center gap-2">
-                      <span className="font-tactical font-bold text-xs sm:text-sm text-neutral-100 tracking-wide">
-                        Salvador Silva
-                      </span>
-                      <span className="px-1.5 py-0.2 rounded bg-neutral-800 border border-neutral-700 text-[9px] font-tactical font-bold text-neutral-300 uppercase">
-                        ADMIN
-                      </span>
+                  return (
+                    <div
+                      id="admin-user-card"
+                      className="w-full bg-neutral-900/60 border-y border-neutral-800/80 px-4 sm:px-6 py-2 flex items-center gap-3 hover:bg-neutral-900/90 transition-colors shadow-sm"
+                    >
+                      {/* Avatar Salvador Silva */}
+                      <button
+                        type="button"
+                        onClick={(e) =>
+                          handleAvatarClick(
+                            e,
+                            'Salvador Silva',
+                            adminAvatar,
+                            'Administrador',
+                            isSalvadorOccupied ? 'OCUPADO' : 'DISPONIVEL'
+                          )
+                        }
+                        title={
+                          isAdminLoggedIn
+                            ? 'Clique para inserir/alterar sua foto na galeria'
+                            : 'Clique para ver a foto de Salvador Silva em tamanho grande'
+                        }
+                        className="relative w-9 h-9 rounded-full bg-neutral-800 border-2 border-neutral-600 flex items-center justify-center overflow-hidden shrink-0 shadow-sm cursor-pointer hover:scale-110 transition-transform"
+                      >
+                        {adminAvatar ? (
+                          <img
+                            src={adminAvatar}
+                            alt="Salvador Silva"
+                            className="w-full h-full object-cover rounded-full"
+                          />
+                        ) : (
+                          <Shield className="w-4 h-4 text-neutral-400" />
+                        )}
+                        {/* Status Online dot: azul quando disponível, laranja quando ocupado */}
+                        <span
+                          className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border border-neutral-900 ${
+                            isSalvadorOccupied
+                              ? 'bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.8)]'
+                              : 'bg-blue-500 shadow-[0_0_6px_rgba(59,130,246,0.8)]'
+                          }`}
+                        />
+                      </button>
+
+                      {/* Dados do Administrador */}
+                      <div className="flex flex-col text-left">
+                        <div className="flex items-center gap-2">
+                          <span className="font-tactical font-bold text-xs sm:text-sm text-neutral-100 tracking-wide">
+                            Salvador Silva
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[10px] font-mono-code font-bold leading-none mt-0.5">
+                          <span className="text-blue-400">ONLINE</span>
+                          <span className="text-neutral-500">-</span>
+                          <span
+                            className={
+                              isSalvadorOccupied ? 'text-orange-400' : 'text-blue-400'
+                            }
+                          >
+                            {isSalvadorOccupied ? 'OCUPADO' : 'DISPONÍVEL'}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <span className="text-[10px] font-mono-code text-neutral-400">
-                      Status: Online
-                    </span>
-                  </div>
-                </div>
+                  );
+                })()}
               </div>
             ) : adminUsers.length === 0 ? (
               /* Quando não logado esta área fica vazia */
@@ -337,8 +356,6 @@ export const UserPage: React.FC<UserPageProps> = ({
             {adminUsers.map((user) =>
               renderUserCard(
                 user,
-                'text-amber-400 bg-amber-950/60 border-amber-500/40',
-                'ADMIN',
                 'Administrador'
               )
             )}
@@ -368,8 +385,6 @@ export const UserPage: React.FC<UserPageProps> = ({
                 {moderatorUsers.map((mod) =>
                   renderUserCard(
                     mod,
-                    'text-cyan-400 bg-cyan-950/60 border-cyan-500/40',
-                    'MODERADOR',
                     'Moderador'
                   )
                 )}
@@ -405,8 +420,6 @@ export const UserPage: React.FC<UserPageProps> = ({
                 {regularUsers.map((usr) =>
                   renderUserCard(
                     usr,
-                    'text-emerald-400 bg-emerald-950/60 border-emerald-500/40',
-                    'USUÁRIO',
                     'Usuário'
                   )
                 )}
@@ -441,8 +454,6 @@ export const UserPage: React.FC<UserPageProps> = ({
                 {visitorUsers.map((visitor) =>
                   renderUserCard(
                     visitor,
-                    '',
-                    '',
                     'Visitante'
                   )
                 )}

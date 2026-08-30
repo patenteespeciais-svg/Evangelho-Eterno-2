@@ -4,6 +4,7 @@ import { ChatMessage, RadioUser } from '../types';
 import { soundEffects } from '../services/audioEffects';
 import { formatTimeSeconds } from '../services/audioGenerator';
 import { processImageFile } from '../utils/imageUtils';
+import { formatLoginTitleCase } from '../utils/formatUtils';
 import { LargeAvatarUserData } from './LargeAvatarModal';
 import { audioIntensityService } from '../services/audioIntensityService';
 
@@ -264,7 +265,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({
       }
     } else if (onOpenLargeAvatar) {
       onOpenLargeAvatar({
-        callSign: senderCallSign,
+        callSign: formatLoginTitleCase(senderCallSign),
         avatar: senderAvatar,
         role: senderCallSign === 'Salvador Silva' ? 'Administrador' : 'Operador',
         isOnline: true,
@@ -277,9 +278,10 @@ export const ChatPage: React.FC<ChatPageProps> = ({
   const handleShareAudio = async (msg: ChatMessage) => {
     const isAudio = Boolean(msg.voiceAudioUrl || msg.voiceAudioDuration);
     const duration = formatTimeSeconds(Math.round(msg.voiceAudioDuration || 1));
+    const formattedSender = formatLoginTitleCase(msg.senderCallSign);
     const shareText = isAudio
-      ? `Áudio gravado de ${msg.senderCallSign} (${duration}) - Evangelho Eterno`
-      : `${msg.senderCallSign}: "${msg.text}" - Evangelho Eterno`;
+      ? `Áudio gravado de ${formattedSender} (${duration}) - Evangelho Eterno`
+      : `${formattedSender}: "${msg.text}" - Evangelho Eterno`;
 
     if (navigator.share) {
       try {
@@ -346,19 +348,19 @@ export const ChatPage: React.FC<ChatPageProps> = ({
             <button
               type="button"
               onClick={() => handleAvatarClick(speakerName, speakerAvatar)}
-              title={speakerName === myCallSign ? "Clique para alterar a foto do seu login" : `Clique para ver a foto de ${speakerName} em tamanho grande`}
-              className="relative w-6 h-6 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center overflow-hidden shrink-0 cursor-pointer hover:scale-110 transition-transform"
+              title={speakerName === myCallSign ? "Clique para alterar a foto do seu login" : `Clique para ver a foto de ${formatLoginTitleCase(speakerName)} em tamanho grande`}
+              className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center overflow-hidden shrink-0 cursor-pointer hover:scale-105 transition-transform"
             >
               {speakerAvatar ? (
-                <img src={speakerAvatar} alt={speakerName} className="w-full h-full object-cover rounded-full" />
+                <img src={speakerAvatar} alt={formatLoginTitleCase(speakerName)} className="w-full h-full object-cover rounded-full" />
               ) : (
-                <User className="w-3.5 h-3.5 text-neutral-300" />
+                <User className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-neutral-300" />
               )}
             </button>
 
             <div className="flex flex-col text-left justify-center">
-              <span className="font-tactical font-bold text-xs text-neutral-100 uppercase tracking-wide leading-tight">
-                {speakerName}
+              <span className="font-tactical font-bold text-xs text-neutral-100 tracking-wide leading-tight">
+                {formatLoginTitleCase(speakerName)}
               </span>
             </div>
           </div>
@@ -416,13 +418,13 @@ export const ChatPage: React.FC<ChatPageProps> = ({
                 <button
                   type="button"
                   onClick={() => handleAvatarClick(msg.senderCallSign, msg.senderAvatar)}
-                  title={isSenderMe ? "Clique para alterar a foto do seu login na galeria" : `Clique para ver a foto de ${msg.senderCallSign} em tamanho grande`}
-                  className="relative w-6 h-6 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center overflow-hidden shrink-0 cursor-pointer hover:scale-110 transition-transform"
+                  title={isSenderMe ? "Clique para alterar a foto do seu login na galeria" : `Clique para ver a foto de ${formatLoginTitleCase(msg.senderCallSign)} em tamanho grande`}
+                  className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center overflow-hidden shrink-0 cursor-pointer hover:scale-105 transition-transform"
                 >
                   {msg.senderAvatar && (msg.senderAvatar.startsWith('data:') || msg.senderAvatar.startsWith('http') || msg.senderAvatar.startsWith('blob:')) ? (
-                    <img src={msg.senderAvatar} alt={msg.senderCallSign} className="w-full h-full object-cover" />
+                    <img src={msg.senderAvatar} alt={formatLoginTitleCase(msg.senderCallSign)} className="w-full h-full object-cover" />
                   ) : (
-                    <User className="w-3.5 h-3.5 text-neutral-400" />
+                    <User className="w-4 h-4 sm:w-4.5 sm:h-4.5 text-neutral-400" />
                   )}
                 </button>
                 
@@ -430,8 +432,8 @@ export const ChatPage: React.FC<ChatPageProps> = ({
                 <div className="flex-1 flex flex-col justify-center min-w-0 pr-1">
                   {/* Login do Operador */}
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="font-tactical font-bold text-xs text-neutral-200 uppercase tracking-wide leading-tight">
-                      {msg.senderCallSign}
+                    <span className="font-tactical font-bold text-xs text-neutral-200 tracking-wide leading-tight">
+                      {formatLoginTitleCase(msg.senderCallSign)}
                     </span>
                     {msg.isPrivateModeration && (
                       <span className="text-[9px] font-mono-code font-bold text-amber-400 bg-amber-500/20 border border-amber-500/30 px-1.5 py-0.2 rounded uppercase">

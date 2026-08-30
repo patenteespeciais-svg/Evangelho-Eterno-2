@@ -1,4 +1,4 @@
-export type NavigationTab = 'RADIO' | 'USUARIO' | 'CHAT';
+export type NavigationTab = 'RADIO' | 'USUARIO' | 'CHAT' | 'LOGIN' | 'CADASTRO';
 
 export type OperatorStatus = 
   | 'QAP'       // QAP: Na escuta / Standby

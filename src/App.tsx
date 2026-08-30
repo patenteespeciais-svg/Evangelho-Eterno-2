@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Lock, CheckCircle2, X, User, Shield, ChevronRight, ShieldAlert, PhoneCall, LogOut, AlertTriangle } from 'lucide-react';
+import { Settings, Lock, CheckCircle2, X, User, Shield, ChevronRight, ShieldAlert, PhoneCall, LogOut, AlertTriangle, ArrowLeft, Camera, RadioTower } from 'lucide-react';
 import { NavigationTab, Channel, RadioUser, ChatMessage } from './types';
 import { RADIO_CHANNELS } from './data/channels';
 import { TopHeader } from './components/TopHeader';
@@ -7,12 +7,25 @@ import { BottomNav } from './components/BottomNav';
 import { CenterMicrophone } from './components/CenterMicrophone';
 import { UserPage } from './components/UserPage';
 import { ChatPage } from './components/ChatPage';
+import { LoginPage } from './components/LoginPage';
+import { RegisterUserPage } from './components/RegisterUserPage';
 import { AdminUserActionMenu, AdminActionType } from './components/AdminUserActionMenu';
 import { LargeAvatarModal, LargeAvatarUserData } from './components/LargeAvatarModal';
 import { socketService } from './services/socketService';
 import { soundEffects } from './services/audioEffects';
 import { generateRadioAudioWav } from './services/audioGenerator';
 import { audioIntensityService } from './services/audioIntensityService';
+import { processImageFile } from './utils/imageUtils';
+
+const isSalvadorSilva = (name?: string | null): boolean => {
+  if (!name) return false;
+  const clean = name.trim().toLowerCase();
+  return (
+    clean === 'salvador silva' ||
+    clean === 'salvador' ||
+    clean.includes('salvador silva')
+  );
+};
 
 export default function App() {
   // Navigation: Strict 3 pages [RADIO / USUÁRIO / CHAT]
@@ -25,16 +38,50 @@ export default function App() {
   // Admin floating modal state & Fixed Admin Avatar
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('walkie_registered_user');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (isSalvadorSilva(parsed.fullName) || isSalvadorSilva(parsed.callSign)) {
+            return true;
+          }
+        }
+        const savedCallSign =
+          localStorage.getItem('walkie_callsign') ||
+          localStorage.getItem('walkie_current_callsign');
+        if (savedCallSign && isSalvadorSilva(savedCallSign)) {
+          return true;
+        }
+        if (localStorage.getItem('walkie_is_admin') === 'true') {
+          return true;
+        }
+      } catch {}
+    }
+    return false;
+  });
   const [showLoginSuccessMessage, setShowLoginSuccessMessage] = useState(false);
   const [selectedUserForAction, setSelectedUserForAction] = useState<string | null>(null);
   const [adminToastMessage, setAdminToastMessage] = useState<string | null>(null);
+  const [channelAvatar, setChannelAvatar] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return (
+        localStorage.getItem('channel_avatar_evangelho_eterno') ||
+        localStorage.getItem('admin_avatar_photo')
+      );
+    }
+    return null;
+  });
   const [adminAvatar, setAdminAvatar] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('admin_avatar_photo');
     }
     return null;
   });
+
+  const channelFileInputRef = useRef<HTMLInputElement>(null);
+  const adminProfileFileInputRef = useRef<HTMLInputElement>(null);
 
   // Silenced Users & Moderation System State
   const [silencedUsers, setSilencedUsers] = useState<string[]>(() => {
@@ -208,6 +255,24 @@ export default function App() {
     soundEffects.playRogerBeep('motorola');
   };
 
+  const handleUpdateChannelAvatar = (photoUrl: string) => {
+    setChannelAvatar(photoUrl);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('channel_avatar_evangelho_eterno', photoUrl);
+      } catch (e) {
+        console.error('Error saving channel avatar to localStorage', e);
+      }
+    }
+    socketService.send({
+      type: 'UPDATE_CHANNEL_AVATAR',
+      avatar: photoUrl,
+      channelName: 'EVANGELHO ETERNO',
+    });
+    setAdminToastMessage('FOTO DO CANAL EVANGELHO ETERNO ATUALIZADA');
+    setTimeout(() => setAdminToastMessage(null), 3000);
+  };
+
   const handleUpdateAdminAvatar = (photoUrl: string) => {
     setAdminAvatar(photoUrl);
     if (typeof window !== 'undefined') {
@@ -229,16 +294,23 @@ export default function App() {
       if (typeof window !== 'undefined') {
         try {
           localStorage.setItem('walkie_user_avatar', photoUrl);
+          const savedReg = localStorage.getItem('walkie_registered_user');
+          if (savedReg) {
+            const parsed = JSON.parse(savedReg);
+            parsed.avatar = photoUrl;
+            localStorage.setItem('walkie_registered_user', JSON.stringify(parsed));
+          }
         } catch (e) {
           console.error('Error saving user avatar to localStorage', e);
         }
       }
       return updated;
     });
+    const myCallSign = isAdminLoggedIn ? 'Salvador Silva' : (currentUser.callSign || 'Operador 42');
     socketService.send({
       type: 'UPDATE_USER_AVATAR',
       avatar: photoUrl,
-      callSign: currentUser.callSign || 'Operador 42',
+      callSign: myCallSign,
     });
   };
 
@@ -323,13 +395,31 @@ export default function App() {
   // Channel & User State
   const [currentChannel] = useState<Channel>(RADIO_CHANNELS[0]);
   const [currentUser, setCurrentUser] = useState<RadioUser>(() => {
-    const savedCallSign = typeof window !== 'undefined' ? localStorage.getItem('walkie_callsign') : null;
+    const savedCallSign =
+      typeof window !== 'undefined'
+        ? localStorage.getItem('walkie_callsign') || localStorage.getItem('walkie_current_callsign')
+        : null;
     const savedAvatar = typeof window !== 'undefined' ? localStorage.getItem('walkie_user_avatar') : null;
+    let savedFullName: string | null = null;
+    let savedRole: string | null = null;
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('walkie_registered_user');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          savedFullName = parsed.fullName || null;
+          savedRole = parsed.role || null;
+        }
+      } catch {}
+    }
+
+    const isUserSalvador = isSalvadorSilva(savedCallSign) || isSalvadorSilva(savedFullName);
+
     return {
       id: 'usr-' + Math.random().toString(36).substring(2, 8),
-      callSign: savedCallSign ? savedCallSign.trim().toUpperCase() : 'OPERADOR 42',
+      callSign: savedCallSign ? savedCallSign.trim() : (isUserSalvador ? 'Salvador Silva' : 'OPERADOR 42'),
       avatar: savedAvatar || 'shield',
-      role: 'Comandante de Operações',
+      role: isUserSalvador ? 'Administrador' : (savedRole || 'Operador'),
       status: 'QAP',
       channelId: 1,
       isTransmitting: false,
@@ -627,6 +717,12 @@ export default function App() {
       soundEffects.playRogerBeep('motorola');
     });
 
+    const unsubChannelAvatar = socketService.on('UPDATE_CHANNEL_AVATAR', (payload) => {
+      if (payload.avatar) {
+        setChannelAvatar(payload.avatar);
+      }
+    });
+
     const unsubAdminAvatar = socketService.on('UPDATE_ADMIN_AVATAR', (payload) => {
       if (payload.avatar) {
         setAdminAvatar(payload.avatar);
@@ -657,6 +753,7 @@ export default function App() {
       unsubModReq();
       unsubModStart();
       unsubModEnd();
+      unsubChannelAvatar();
       unsubAdminAvatar();
       unsubUserAvatar();
     };
@@ -963,27 +1060,31 @@ export default function App() {
     <div className="h-[100dvh] w-full bg-neutral-950 text-neutral-100 flex flex-col justify-between overflow-hidden selection:bg-amber-500 selection:text-black relative">
       
       {/* Top Banner Strip with Bola Avatar, EVANGELHO ETERNO & Three Dots on Right (RADIO only) or Trash (CHAT only) */}
-      <TopHeader
-        currentUser={currentUser}
-        currentChannel={currentChannel}
-        isConnected={isConnected}
-        isTransmitting={isTransmitting}
-        incomingSpeaker={incomingSpeaker}
-        txTime={txTime}
-        activeTab={activeTab}
-        isAdminLoggedIn={isAdminLoggedIn}
-        adminAvatar={adminAvatar}
-        onUpdateAdminAvatar={handleUpdateAdminAvatar}
-        onUpdateUserAvatar={handleUpdateUserAvatar}
-        onOpenLargeAvatar={handleOpenLargeAvatar}
-        onlineCount={onlineUsersCount}
-        currentAvailability={myAvailability}
-        onStatusSelect={handleStatusSelect}
-        onClearChat={handleClearChat}
-      />
+      {activeTab !== 'LOGIN' && activeTab !== 'CADASTRO' && (
+        <TopHeader
+          currentUser={currentUser}
+          currentChannel={currentChannel}
+          isConnected={isConnected}
+          isTransmitting={isTransmitting}
+          incomingSpeaker={incomingSpeaker}
+          txTime={txTime}
+          activeTab={activeTab}
+          isAdminLoggedIn={isAdminLoggedIn}
+          channelAvatar={channelAvatar}
+          adminAvatar={adminAvatar}
+          onUpdateChannelAvatar={handleUpdateChannelAvatar}
+          onUpdateAdminAvatar={handleUpdateAdminAvatar}
+          onUpdateUserAvatar={handleUpdateUserAvatar}
+          onOpenLargeAvatar={handleOpenLargeAvatar}
+          onlineCount={onlineUsersCount}
+          currentAvailability={myAvailability}
+          onStatusSelect={handleStatusSelect}
+          onClearChat={handleClearChat}
+        />
+      )}
 
       {/* Tarja de Queda de Internet */}
-      {!isOnline && (
+      {!isOnline && activeTab !== 'LOGIN' && activeTab !== 'CADASTRO' && (
         <div
           id="offline-connection-banner"
           className="w-full bg-amber-950/95 border-y border-amber-500 py-1.5 px-4 flex items-center justify-center gap-2 text-amber-300 text-xs font-tactical font-bold tracking-wider shadow-lg animate-pulse z-50 select-none"
@@ -1005,7 +1106,7 @@ export default function App() {
       )}
 
       {/* Alerta / Notificação de Solicitação de Moderação para o Administrador */}
-      {isAdminLoggedIn && moderationRequests.length > 0 && (
+      {isAdminLoggedIn && moderationRequests.length > 0 && activeTab !== 'LOGIN' && activeTab !== 'CADASTRO' && (
         <div
           id="admin-moderation-request-banner"
           onClick={() => handleConnectModeration(moderationRequests[0].userCallSign)}
@@ -1031,10 +1132,22 @@ export default function App() {
         </div>
       )}
 
-      {/* Sub-barra abaixo da tarja superior (somente na aba RÁDIO): Engrenagem à esquerda e Bolinha laranja discreta à direita */}
+      {/* Sub-barra abaixo da tarja superior (somente na aba RÁDIO): Seta acima da Engrenagem à esquerda e Bolinha laranja discreta à direita */}
       {activeTab === 'RADIO' && (
-        <div id="radio-top-sub-bar" className="w-full px-4 sm:px-6 pt-2 pb-0 flex items-center justify-between select-none relative z-40">
-          <div className="relative" ref={adminMenuRef}>
+        <div id="radio-top-sub-bar" className="w-full px-4 sm:px-6 pt-1.5 pb-0 flex items-center justify-between select-none relative z-40">
+          <div className="relative flex flex-col items-start gap-1" ref={adminMenuRef}>
+            {/* Seta acima da engrenagem do lado esquerdo que conduz à aba de login */}
+            <button
+              id="btn-go-to-login-arrow"
+              type="button"
+              onClick={() => setActiveTab('LOGIN')}
+              title="Acessar Página de Login"
+              aria-label="Ir para a página de Login"
+              className="p-1 text-amber-400 hover:text-amber-300 hover:bg-neutral-900 rounded-lg transition-colors cursor-pointer group flex items-center justify-center -mb-0.5"
+            >
+              <ArrowLeft className="w-5 h-5 text-amber-400 group-hover:-translate-x-0.5 transition-transform" />
+            </button>
+
             <button
               id="radio-gear-btn"
               type="button"
@@ -1089,6 +1202,110 @@ export default function App() {
                       <span className="text-[10px] font-mono-code text-emerald-700 font-semibold">
                         Online
                       </span>
+                    </div>
+
+                    {/* Gerenciamento Independente de Fotos (Canal EVANGELHO ETERNO vs Usuário Salvador Silva) */}
+                    <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-2.5 space-y-2">
+                      <span className="text-[9px] font-tactical font-bold text-neutral-500 uppercase tracking-wider block">
+                        Fotos Independentes (Canal vs Usuário):
+                      </span>
+
+                      {/* Inputs Ocultos */}
+                      <input
+                        ref={channelFileInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            try {
+                              const compressed = await processImageFile(file);
+                              handleUpdateChannelAvatar(compressed);
+                            } catch (err) {
+                              console.error('Erro ao atualizar foto do canal:', err);
+                            }
+                          }
+                          e.target.value = '';
+                        }}
+                      />
+                      <input
+                        ref={adminProfileFileInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            try {
+                              const compressed = await processImageFile(file);
+                              handleUpdateAdminAvatar(compressed);
+                              handleUpdateUserAvatar(compressed);
+                            } catch (err) {
+                              console.error('Erro ao atualizar foto de perfil:', err);
+                            }
+                          }
+                          e.target.value = '';
+                        }}
+                      />
+
+                      {/* 1. Foto do Canal EVANGELHO ETERNO */}
+                      <div className="flex items-center justify-between bg-white p-1.5 rounded-lg border border-neutral-200">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-full bg-neutral-900 border border-neutral-700 flex items-center justify-center overflow-hidden shrink-0">
+                            {channelAvatar ? (
+                              <img src={channelAvatar} alt="Canal" className="w-full h-full object-cover" />
+                            ) : (
+                              <RadioTower className="w-3.5 h-3.5 text-amber-400" />
+                            )}
+                          </div>
+                          <div className="flex flex-col text-left">
+                            <span className="text-[10px] font-tactical font-bold text-neutral-800 uppercase leading-none">
+                              Canal EVANGELHO ETERNO
+                            </span>
+                            <span className="text-[8px] font-mono-code text-neutral-500 mt-0.5">
+                              Tarja superior
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => channelFileInputRef.current?.click()}
+                          className="px-2 py-1 bg-amber-500 hover:bg-amber-600 text-black font-tactical font-bold text-[9px] uppercase tracking-wider rounded-md flex items-center gap-1 shadow-sm transition-colors cursor-pointer"
+                        >
+                          <Camera className="w-3 h-3" />
+                          <span>Alterar</span>
+                        </button>
+                      </div>
+
+                      {/* 2. Minha Foto de Perfil (Salvador Silva) */}
+                      <div className="flex items-center justify-between bg-white p-1.5 rounded-lg border border-neutral-200">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-full bg-neutral-900 border border-neutral-700 flex items-center justify-center overflow-hidden shrink-0">
+                            {currentUser.avatar || adminAvatar ? (
+                              <img src={currentUser.avatar || adminAvatar || ''} alt="Salvador Silva" className="w-full h-full object-cover" />
+                            ) : (
+                              <User className="w-3.5 h-3.5 text-neutral-300" />
+                            )}
+                          </div>
+                          <div className="flex flex-col text-left">
+                            <span className="text-[10px] font-tactical font-bold text-neutral-800 uppercase leading-none">
+                              Salvador Silva (Pessoal)
+                            </span>
+                            <span className="text-[8px] font-mono-code text-neutral-500 mt-0.5">
+                              Perfil do usuário
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => adminProfileFileInputRef.current?.click()}
+                          className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white font-tactical font-bold text-[9px] uppercase tracking-wider rounded-md flex items-center gap-1 shadow-sm transition-colors cursor-pointer"
+                        >
+                          <Camera className="w-3 h-3" />
+                          <span>Alterar</span>
+                        </button>
+                      </div>
                     </div>
 
                     <div>
@@ -1267,8 +1484,93 @@ export default function App() {
       )}
 
       {/* Central area */}
-      <main id="main-content-area" className="flex-1 w-full flex items-start justify-center relative select-none pb-20 overflow-y-auto">
-        {activeTab === 'RADIO' ? (
+      <main id="main-content-area" className={`flex-1 w-full flex items-start justify-center relative select-none ${activeTab === 'LOGIN' || activeTab === 'CADASTRO' ? 'pb-0' : 'pb-20'} overflow-y-auto`}>
+        {activeTab === 'LOGIN' ? (
+          <LoginPage
+            onNavigateToRegister={() => setActiveTab('CADASTRO')}
+            onBackToApp={() => setActiveTab('RADIO')}
+            onLoginSuccess={(callSign) => {
+              let registeredFullName = '';
+              try {
+                const saved = localStorage.getItem('walkie_registered_user');
+                if (saved) {
+                  const parsed = JSON.parse(saved);
+                  registeredFullName = parsed.fullName || '';
+                }
+              } catch {}
+
+              const isSalvador = isSalvadorSilva(callSign) || isSalvadorSilva(registeredFullName);
+
+              if (isSalvador) {
+                setIsAdminLoggedIn(true);
+                if (typeof window !== 'undefined') {
+                  try {
+                    localStorage.setItem('walkie_is_admin', 'true');
+                    localStorage.setItem('walkie_callsign', callSign);
+                  } catch {}
+                }
+                setUserRoles((prev) => ({
+                  ...prev,
+                  [callSign]: 'Administrador',
+                  'Salvador Silva': 'Administrador',
+                }));
+                setCurrentUser((prev) => ({
+                  ...prev,
+                  callSign: callSign,
+                  role: 'Administrador',
+                }));
+              } else {
+                if (typeof window !== 'undefined') {
+                  try {
+                    localStorage.setItem('walkie_callsign', callSign);
+                  } catch {}
+                }
+                setCurrentUser((prev) => ({ ...prev, callSign: callSign }));
+              }
+
+              setIsDisconnectedByUser(false);
+              setMyAvailability('DISPONIVEL');
+              setShowLoginSuccessMessage(true);
+              setTimeout(() => setShowLoginSuccessMessage(false), 3000);
+              setActiveTab('RADIO');
+            }}
+          />
+        ) : activeTab === 'CADASTRO' ? (
+          <RegisterUserPage
+            onNavigateToLogin={() => setActiveTab('LOGIN')}
+            onBackToApp={() => setActiveTab('RADIO')}
+            onRegisterSuccess={(userData) => {
+              const isSalvador = isSalvadorSilva(userData.fullName) || isSalvadorSilva(userData.callSign);
+
+              if (isSalvador) {
+                setIsAdminLoggedIn(true);
+                if (typeof window !== 'undefined') {
+                  try {
+                    localStorage.setItem('walkie_is_admin', 'true');
+                    localStorage.setItem('walkie_callsign', userData.callSign);
+                  } catch {}
+                }
+                setUserRoles((prev) => ({
+                  ...prev,
+                  [userData.callSign]: 'Administrador',
+                  'Salvador Silva': 'Administrador',
+                }));
+              }
+
+              setCurrentUser((prev) => ({
+                ...prev,
+                callSign: userData.callSign,
+                avatar: userData.avatar || prev.avatar,
+                role: isSalvador ? 'Administrador' : (userData.role || 'Usuário'),
+              }));
+              setIsDisconnectedByUser(false);
+              setMyAvailability('DISPONIVEL');
+              setShowLoginSuccessMessage(true);
+              setTimeout(() => setShowLoginSuccessMessage(false), 3000);
+              setActiveTab('RADIO');
+            }}
+          />
+        ) : activeTab === 'RADIO' ? (
           <div className="w-full h-full flex items-center justify-center my-auto">
             <CenterMicrophone
               isTransmitting={isTransmitting}
@@ -1355,14 +1657,16 @@ export default function App() {
         </div>
       )}
 
-      {/* Bottom Navigation Menu: RADIO / USUÁRIO / CHAT */}
-      <BottomNav
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        unreadChatCount={unreadChatCount}
-        isAudioActive={audioIntensity.isActive || isTransmitting || Boolean(incomingSpeaker)}
-        audioLevel={audioIntensity.level}
-      />
+      {/* Bottom Navigation Menu: RADIO / USUÁRIO / CHAT (Oculto nas páginas separadas de Login e Cadastro) */}
+      {activeTab !== 'LOGIN' && activeTab !== 'CADASTRO' && (
+        <BottomNav
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          unreadChatCount={unreadChatCount}
+          isAudioActive={audioIntensity.isActive || isTransmitting || Boolean(incomingSpeaker)}
+          audioLevel={audioIntensity.level}
+        />
+      )}
 
       {/* Floating Large Avatar Modal */}
       <LargeAvatarModal
